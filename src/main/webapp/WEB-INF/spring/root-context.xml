@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  루트 컨텍스트 : 서비스, 저장소, 설정값.
+  컨트롤러(@Controller, @RestController, @ControllerAdvice)는 servlet-context.xml 에서 등록한다.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+           http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- application.yml 대체 : ${...} 값은 src/main/resources/app.properties 에서 읽는다 -->
+    <context:property-placeholder location="classpath:app.properties" file-encoding="UTF-8"/>
+
+    <context:component-scan base-package="kr.go.guro.housing">
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+        <context:exclude-filter type="annotation" expression="org.springframework.web.bind.annotation.ControllerAdvice"/>
+    </context:component-scan>
+
+    <!--
+      app.* 설정 (기존 @ConfigurationProperties(prefix = "app")).
+      로그인 계정 목록은 application.yml 의 app.users 를 옮긴 것이다.
+      비밀번호 앞의 {noop} 은 평문, {bcrypt} 는 BCrypt 해시라는 표시다.
+      실서비스에서는 LoginUserService 를 인사 DB 조회로 바꾸고 이 목록은 지운다.
+    -->
+    <bean id="appProperties" class="kr.go.guro.housing.config.AppProperties">
+        <constructor-arg index="0">
+            <bean class="kr.go.guro.housing.config.AppProperties$Kakao">
+                <constructor-arg index="0" value="${app.kakao.js-key:}"/>
+            </bean>
+        </constructor-arg>
+        <constructor-arg index="1">
+            <list>
+                <!-- 사원번호, 비밀번호, 이름, 기관, 부서, 담당 -->
+                <bean class="kr.go.guro.housing.config.AppProperties$UserAccount">
+                    <constructor-arg index="0" value="2026001"/>
+                    <constructor-arg index="1" value="{noop}guro1234"/>
+                    <constructor-arg index="2" value="김지원"/>
+                    <constructor-arg index="3" value="구로구청"/>
+                    <constructor-arg index="4" value="주거복지과"/>
+                    <constructor-arg index="5" value="주거복지담당자"/>
+                </bean>
+                <bean class="kr.go.guro.housing.config.AppProperties$UserAccount">
+                    <constructor-arg index="0" value="2026002"/>
+                    <constructor-arg index="1" value="{noop}guro1234"/>
+                    <constructor-arg index="2" value="박서연"/>
+                    <constructor-arg index="3" value="구로구청"/>
+                    <constructor-arg index="4" value="복지정책과"/>
+                    <constructor-arg index="5" value="복지정책담당자"/>
+                </bean>
+            </list>
+        </constructor-arg>
+    </bean>
+</beans>

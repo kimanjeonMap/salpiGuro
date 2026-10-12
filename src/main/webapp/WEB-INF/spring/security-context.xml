@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Security 설정 (기존 config/SecurityConfig.java 를 옮긴 것).
+  - 로그인 화면·정적 리소스를 빼고 모두 로그인 필요
+  - /api/** 는 로그인 화면으로 보내지 않고 401 을 돌려준다
+  - CSRF 보호는 기본으로 켜져 있다 : JSP 폼과 fetch 요청에 토큰을 실어야 한다
+-->
+<beans:beans xmlns="http://www.springframework.org/schema/security"
+             xmlns:beans="http://www.springframework.org/schema/beans"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="
+                 http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+                 http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
+
+    <http request-matcher="ant" entry-point-ref="authEntryPoint">
+        <intercept-url pattern="/login" access="permitAll"/>
+        <intercept-url pattern="/css/**" access="permitAll"/>
+        <intercept-url pattern="/js/**" access="permitAll"/>
+        <intercept-url pattern="/img/**" access="permitAll"/>
+        <intercept-url pattern="/favicon.ico" access="permitAll"/>
+        <intercept-url pattern="/**" access="authenticated"/>
+
+        <!-- 로그인 성공 → 메인(지도), 실패 → 로그인 화면 유지 + 알림 -->
+        <form-login login-page="/login"
+                    login-processing-url="/login"
+                    username-parameter="empNo"
+                    password-parameter="password"
+                    default-target-url="/map"
+                    always-use-default-target="true"
+                    authentication-failure-url="/login?error"/>
+
+        <!-- CSRF 가 켜져 있으므로 로그아웃은 POST /logout 으로 보낸다 -->
+        <logout logout-url="/logout"
+                logout-success-url="/login?logout"
+                invalidate-session="true"
+                delete-cookies="JSESSIONID"/>
+    </http>
+
+    <!-- /api/** → 401, 그 밖의 화면 → /login 으로 이동 -->
+    <beans:bean id="authEntryPoint" class="org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint">
+        <beans:constructor-arg>
+            <beans:map>
+                <beans:entry>
+                    <beans:key>
+                        <beans:bean class="org.springframework.security.web.util.matcher.AntPathRequestMatcher">
+                            <beans:constructor-arg value="/api/**"/>
+                        </beans:bean>
+                    </beans:key>
+                    <beans:bean class="org.springframework.security.web.authentication.HttpStatusEntryPoint">
+                        <beans:constructor-arg value="UNAUTHORIZED"/>
+                    </beans:bean>
+                </beans:entry>
+            </beans:map>
+        </beans:constructor-arg>
+        <beans:property name="defaultEntryPoint">
+            <beans:bean class="org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint">
+                <beans:constructor-arg value="/login"/>
+            </beans:bean>
+        </beans:property>
+    </beans:bean>
+
+    <!-- 사원번호로 사용자를 찾는다 (auth/LoginUserService) -->
+    <authentication-manager>
+        <authentication-provider user-service-ref="loginUserService">
+            <password-encoder ref="passwordEncoder"/>
+        </authentication-provider>
+    </authentication-manager>
+
+    <!-- {noop}, {bcrypt} 등 접두어로 인코딩 방식을 구분한다 -->
+    <beans:bean id="passwordEncoder"
+                class="org.springframework.security.crypto.factory.PasswordEncoderFactories"
+                factory-method="createDelegatingPasswordEncoder"/>
+</beans:beans>
