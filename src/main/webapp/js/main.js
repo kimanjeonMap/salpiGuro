@@ -28,6 +28,9 @@
     const state = {
       criteria: C.CRITERIA.map(c => Object.assign({}, c, { enabled: true, open: true })),
       includeBasement: false,
+      includeViol: true,
+      useAll: [],          // 건축물용도 전체 목록 [{ name, count }]
+      uses: null,          // 선택한 용도 Set (null = 전체)
       selectedId: null,
       detail: null,   // 선택 건물 상세 (서버)
       work: null,     // 선택 건물의 보관함 항목
@@ -44,6 +47,12 @@
       const q = new URLSearchParams();
       state.criteria.forEach(c => { q.set(c.key, c.value); q.set(c.key + 'On', c.enabled); });
       q.set('basement', state.includeBasement);
+      q.set('viol', state.includeViol);
+      /* 전체 선택이면 보내지 않음(=전체), 하나도 없으면 아무 건물과도 맞지 않는 값 */
+      if (state.uses && state.uses.size < state.useAll.length) {
+        if (state.uses.size === 0) q.append('uses', '__none__');
+        else state.uses.forEach(u => q.append('uses', u));
+      }
       return q;
     }
 
@@ -92,7 +101,7 @@
     }
     /* 겹친 건물 목록 → 구역 패널용 집계 (서버 Cluster 와 같은 모양) */
     function samePlaceAgg(list) {
-      const hist = new Array(8).fill(0);                 // 서버 MAX_FACTORS(7) + 1
+      const hist = new Array(10).fill(0);                // 서버 MAX_FACTORS(9) + 1
       list.forEach(b => { hist[Math.min(b.count, hist.length - 1)]++; });
       return {
         size: list.length,
@@ -739,6 +748,38 @@
       btn.setAttribute('aria-expanded', c.open);
     });
     $('#chk-basement').addEventListener('change', e => { state.includeBasement = e.target.checked; recompute(); });
+    $('#chk-viol').addEventListener('change', e => { state.includeViol = e.target.checked; recompute(); });
+
+    /* ---------- 좌측 : 건축물 용도 (여러 개 선택) ---------- */
+    function renderUses() {
+      $('#use-list').innerHTML = state.useAll.map(u => `
+        <label class="chk use-item"><input type="checkbox" data-use="${esc(u.name)}" ${state.uses.has(u.name) ? 'checked' : ''}>
+          <span class="use-name">${esc(u.name)}</span><span class="use-cnt">${u.count.toLocaleString()}</span></label>`).join('');
+    }
+    async function loadUses() {
+      try {
+        const m = await Common.api('GET', '/api/buildings/uses');
+        state.useAll = Object.keys(m).map(name => ({ name, count: m[name] }));
+        state.uses = new Set(state.useAll.map(u => u.name));
+        renderUses();
+      } catch (err) {
+        $('#use-list').innerHTML = '<p class="crit-desc">용도 목록을 불러오지 못했습니다.</p>';
+      }
+    }
+    $('#use-list').addEventListener('change', e => {
+      const u = e.target.dataset.use;
+      if (u == null) return;
+      if (e.target.checked) state.uses.add(u); else state.uses.delete(u);
+      recompute();
+    });
+    document.querySelectorAll('.use-tool').forEach(btn => btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      const names = state.useAll.map(u => u.name);
+      state.uses = new Set(p === 'all' ? names : p === 'none' ? [] : names.filter(n => (C.USE_PRESETS[p] || []).includes(n)));
+      renderUses();
+      recompute();
+    }));
+    loadUses();
 
     /* ---------- 좌측 : 지도 레이어 ----------
        병원·복지시설·정류장은 좌표 없이 이름·거리만 제공되어 지도 레이어로 그릴 수 없음 → 건물 레이어만 제공 */

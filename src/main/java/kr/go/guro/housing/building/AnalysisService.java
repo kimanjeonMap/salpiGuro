@@ -60,6 +60,12 @@ public class AnalysisService {
         if (c.lowlandOn() && b.elevM() != null && b.elevM() <= c.lowland()) {
             out.add(new Factor("lowland", "저지대", "해발 " + fmt(b.elevM(), 1) + " m (기준 " + fmt(c.lowland(), 0) + " m 이하)"));
         }
+        if (c.floodOn() && b.floodCnt() >= c.flood()) {
+            out.add(new Factor("flood", "침수", "침수흔적 " + b.floodCnt() + "회 중첩 (기준 " + c.flood() + "회 이상)"));
+        }
+        if (c.viol() && Boolean.TRUE.equals(b.violYn())) {
+            out.add(new Factor("viol", "위반건축물", "건축물대장에 위반건축물로 등재된 건물"));
+        }
         if (c.basement() && b.hasBasement()) {
             out.add(new Factor("basement", "지하층", "지하 " + b.ugrndFlr() + "층 보유 건물 (지하층 주거 등록 자료 없음 → 지하층 유무로 판정)"));
         }
@@ -84,15 +90,32 @@ public class AnalysisService {
      * 취약요인이 많은 건물부터 최대 limit개만 돌려준다 (limit ≤ 0 이면 전부).
      */
     public List<BuildingPoint> points(Criteria c, double[] bbox, int limit) {
-        Stream<BuildingPoint> s = repo.findAll().stream()
+        Stream<BuildingPoint> s = all(c).stream()
                 .filter(b -> bbox == null || (b.lng() >= bbox[0] && b.lng() <= bbox[2] && b.lat() >= bbox[1] && b.lat() <= bbox[3]))
                 .map(b -> toPoint(b, c))
                 .sorted(MAP_ORDER);
         return (limit > 0 ? s.limit(limit) : s).toList();
     }
 
-    /** 취약요인 수 최댓값 (age, slope, hospital, welfare, bus, lowland, basement) */
-    private static final int MAX_FACTORS = 7;
+    /** 취약요인 수 최댓값 (age, slope, hospital, welfare, bus, lowland, flood, basement, viol) */
+    private static final int MAX_FACTORS = 9;
+
+    /** 선택한 건축물용도만 남긴 건물 목록 (용도 선택이 없으면 전체) */
+    private List<Building> all(Criteria c) {
+        List<Building> list = repo.findAll();
+        return c.uses() == null ? list : list.stream().filter(b -> c.acceptsUse(b.useLabel())).toList();
+    }
+
+    /** 건축물용도 목록과 건물 수 (많은 순). 용도 미상도 하나의 항목으로 */
+    public Map<String, Long> uses() {
+        Map<String, Long> cnt = new HashMap<>();
+        for (Building b : repo.findAll()) cnt.merge(b.useLabel(), 1L, Long::sum);
+        Map<String, Long> out = new LinkedHashMap<>();
+        cnt.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .forEach(e -> out.put(e.getKey(), e.getValue()));
+        return out;
+    }
 
     /**
      * 지도 묶음 : bbox 안 건물을 격자로 묶는다.
@@ -112,7 +135,7 @@ public class AnalysisService {
         }
 
         Map<Long, ClusterAcc> cells = new HashMap<>();
-        for (Building b : repo.findAll()) {
+        for (Building b : all(c)) {
             if (bbox != null && (b.lng() < bbox[0] || b.lng() > bbox[2] || b.lat() < bbox[1] || b.lat() > bbox[3])) continue;
             long ix = (long) Math.floor(b.lng() / cell);
             long iy = (long) Math.floor(b.lat() / cellLat);
@@ -152,16 +175,16 @@ public class AnalysisService {
     }
 
     public Summary summary(Criteria c) {
-        List<Building> all = repo.findAll();
+        List<Building> list = all(c);
         long risk = 0;
         Map<String, Long> byDong = new LinkedHashMap<>();
-        for (Building b : all) {
+        for (Building b : list) {
             if (evaluate(b, c).size() >= riskMin) {
                 risk++;
                 byDong.merge(b.dongName(), 1L, Long::sum);
             }
         }
-        return new Summary(all.size(), risk, riskMin, byDong);
+        return new Summary(list.size(), risk, riskMin, byDong);
     }
 
     public List<DongInfo> dongs() {
@@ -180,7 +203,7 @@ public class AnalysisService {
     /** 동 선택 + 세부 주소(지번, 용도, 건물번호) 검색 */
     public List<BuildingPoint> search(String dongCode, String q, Criteria c, int limit) {
         String nq = q == null ? "" : q.replaceAll("\\s", "").toLowerCase(Locale.ROOT);
-        return repo.findAll().stream()
+        return all(c).stream()
                 .filter(b -> dongCode == null || dongCode.isBlank() || b.dongCode().equals(dongCode))
                 .filter(b -> nq.isEmpty() || (nz(b.addr()) + nz(b.useNm()) + b.bldId() + nz(b.pnu()))
                         .replaceAll("\\s", "").toLowerCase(Locale.ROOT).contains(nq))
@@ -201,8 +224,9 @@ public class AnalysisService {
                     new Indicator("welfare", "복지시설 · " + nz(b.welfNm()), fmt(b.welfDist(), 0) + " m", judge(c.welfareOn(), b.welfDist() > c.welfare())),
                     new Indicator("bus", "정류장 · " + nz(b.busNm()), fmt(b.busDist(), 0) + " m", judge(c.busOn(), b.busDist() > c.bus())),
                     new Indicator("basement", "지하층", b.ugrndFlr() == null ? "자료 없음" : b.hasBasement() ? "지하 " + b.ugrndFlr() + "층" : "없음", b.hasBasement() ? (c.basement() ? "hit" : "na") : "ok"),
-                    new Indicator("flood", "침수횟수", b.floodCnt() + "회", b.floodCnt() > 0 ? "warn" : "info"),
-                    new Indicator("viol", "위반건축물", b.violYn() == null ? "자료 없음" : b.violYn() ? "해당" : "해당 없음", "info"));
+                    new Indicator("flood", "침수횟수", b.floodCnt() + "회", judge(c.floodOn(), b.floodCnt() >= c.flood())),
+                    new Indicator("viol", "위반건축물", b.violYn() == null ? "자료 없음" : b.violYn() ? "해당" : "해당 없음",
+                            b.violYn() == null ? "na" : judge(c.viol(), b.violYn())));
             return new BuildingDetail(toPoint(b, c), b.fid(), b.pnu(), b.addr(), b.useDate(), b.violYn(), b.floodCnt(),
                     b.hospNm(), b.hospDist(), b.welfNm(), b.welfDist(), b.busNm(), b.busDist(), b.elevM(), b.slopeDeg(),
                     factors, ind);

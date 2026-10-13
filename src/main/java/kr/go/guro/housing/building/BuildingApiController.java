@@ -1,6 +1,7 @@
 package kr.go.guro.housing.building;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +34,12 @@ public class BuildingApiController {
     @GetMapping("/regions/dongs")
     public List<DongInfo> dongs() {
         return analysis.dongs();
+    }
+
+    /** 건축물용도 목록과 건물 수 (좌측 용도 체크박스용) */
+    @GetMapping("/buildings/uses")
+    public Map<String, Long> uses() {
+        return analysis.uses();
     }
 
     /** 구 단위 집계 : 전체 건물 수, 취약요인 N개 이상 건물 수, 동별 분포 */

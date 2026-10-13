@@ -50,7 +50,7 @@ window.APP_CONFIG = {
     { min: 0,   key: 'green' }
   ],
 
-  /* 취약요인 기준 6종 (기본값은 참고 화면 기준) */
+  /* 취약요인 기준 7종 (기본값은 참고 화면 기준). 지하층·위반건축물은 좌측 패널 체크박스로 따로 */
   CRITERIA: [
     { key: 'age',      label: '노후 건물 (준공 후)', unit: '년', suffix: ' 이상', min: 10,  max: 50,   step: 1,  value: 30,
       desc: '사용승인일로부터 경과한 햇수가 기준 이상이면 요인으로 봅니다.' },
@@ -63,6 +63,13 @@ window.APP_CONFIG = {
     { key: 'bus',      label: '정류장까지 거리',     unit: 'm',  suffix: ' 초과', min: 50,  max: 1000, step: 10, value: 300,
       desc: '가장 가까운 버스정류장까지 직선거리가 기준보다 멀면 요인으로 봅니다.' },
     { key: 'lowland',  label: '저지대 (고도 이하)',  unit: 'm',  suffix: ' 이하', min: 5,   max: 80,   step: 1,  value: 30,
-      desc: '건물 위치의 해발고도(DEM)가 기준 이하이면 요인으로 봅니다.' }
-  ]
+      desc: '건물 위치의 해발고도(DEM)가 기준 이하이면 요인으로 봅니다.' },
+    { key: 'flood',    label: '침수 이력',          unit: '회', suffix: ' 이상', min: 1,   max: 4,    step: 1,  value: 1,
+      desc: '침수흔적도(2010·2011·2022·2024)와 겹친 연도 수가 기준 이상이면 요인으로 봅니다.' }
+  ],
+
+  /* 건축물용도 빠른 선택 (좌측 '건축물 용도' 패널) */
+  USE_PRESETS: {
+    residential: ['단독주택', '공동주택']
+  }
 };

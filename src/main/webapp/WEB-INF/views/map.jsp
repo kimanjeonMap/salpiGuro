@@ -33,6 +33,20 @@
           <label class="chk"><input type="checkbox" id="chk-basement"><span>지하층 주거 등록 건물을 요인에 포함</span></label>
           <p>현재 자료에 지하층 주거 등록 여부가 없어 지하층(ugrnd_flr)이 있는 건물에 취약요인 1개를 더합니다.</p>
         </div>
+        <div class="basement-opt">
+          <label class="chk"><input type="checkbox" id="chk-viol" checked><span>위반건축물을 요인에 포함</span></label>
+          <p>건축물대장에 위반건축물로 등재된 건물에 취약요인 1개를 더합니다. 대장 미연계 건물은 판정하지 않습니다.</p>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2 class="sec-title">건축물 용도 <small>선택한 용도만 표시·집계</small></h2>
+        <div class="use-tools">
+          <button type="button" class="use-tool" data-preset="all">전체</button>
+          <button type="button" class="use-tool" data-preset="residential">주거만</button>
+          <button type="button" class="use-tool" data-preset="none">전체 해제</button>
+        </div>
+        <div class="use-list" id="use-list"><p class="crit-desc">용도 목록을 불러오는 중…</p></div>
       </section>
 
       <section class="sec">
