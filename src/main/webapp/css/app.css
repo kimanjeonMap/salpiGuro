@@ -1,4 +1,4 @@
-/* 주거환경 취약요인 공간분석 — 공통 스타일 */
+/* 살피구로 (주거환경 취약요인 공간분석) — 공통 스타일 */
 :root {
   --navy: #1E3A5F;
   --navy-2: #2C5282;
@@ -52,8 +52,13 @@ select.field { appearance: none; padding-right: 32px;
 /* ---------- 헤더 ---------- */
 .app-header { height: var(--header-h); display: flex; align-items: center; gap: 36px; padding: 0 24px;
   background: #fff; border-bottom: 1px solid var(--line); position: relative; z-index: 10; }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
-.brand-mark { width: 30px; height: 30px; border-radius: 7px; background: var(--navy); display: grid; place-items: center; }
+.brand { display: flex; align-items: center; text-decoration: none; white-space: nowrap; }
+/* 로고 : 살피구로 */
+.brand-logo { font-size: 30px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
+.brand-logo .b1 { color: #0096D6; }
+.brand-logo .b2 { color: #8DC845; }
+.brand-logo .b3 { color: #FF9600; }
+.brand-logo .b4 { color: #EC407A; }
 .gnb { display: flex; height: 100%; }
 .gnb a { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 16px; color: var(--sub); text-decoration: none; font-weight: 500; border-bottom: 3px solid transparent; }
 .gnb a:hover { color: var(--text); }
@@ -72,6 +77,8 @@ select.field { appearance: none; padding-right: 32px;
 .login-visual { background: var(--navy); color: #fff; padding: 56px 64px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
 .login-visual h1 { font-size: 34px; line-height: 1.3; font-weight: 700; letter-spacing: -0.03em; max-width: 14em; }
 .login-visual p { margin-top: 16px; color: #C9D5E6; max-width: 30em; }
+.login-visual .login-logo .brand-logo { font-size: 60px; letter-spacing: -0.05em; }
+.login-visual .login-sub { margin-top: 14px; color: #fff; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
 .login-visual .grid-art { position: absolute; right: -40px; bottom: -40px; width: 520px; opacity: .9; }
 .login-visual .foot { color: #9FB2CC; font-size: 12px; position: relative; }
 .login-form-wrap { background: #fff; display: flex; align-items: center; justify-content: center; padding: 48px; }
@@ -166,6 +173,14 @@ section.ai.has-new .ai-ico::after { content: ''; position: absolute; top: -3px; 
 .map-chip { pointer-events: auto; background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 7px 14px; font-size: 13px; color: var(--sub); box-shadow: 0 2px 6px rgba(27, 36, 48, .08); }
 .map-chip b { color: var(--red); }
 .map-chip.scale b { color: var(--navy); }
+/* 취약 건물만 보기 칩 (켜짐 = 빨간 체크) */
+.map-chip.chip-toggle { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; cursor: pointer; }
+.map-chip.chip-toggle:hover { border-color: #C9D0DA; color: var(--text); }
+.chip-toggle .ck { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid #C2C9D3; background: #fff; display: grid; place-items: center; }
+.chip-toggle .ck svg { opacity: 0; }
+.chip-toggle.on { border-color: rgba(217, 58, 58, .45); color: var(--text); }
+.chip-toggle.on .ck { background: var(--red); border-color: var(--red); }
+.chip-toggle.on .ck svg { opacity: 1; }
 .map-ctrl { position: absolute; top: 14px; right: 14px; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; z-index: 5; box-shadow: 0 2px 6px rgba(27, 36, 48, .08); }
 .map-ctrl button { width: 40px; height: 40px; border: 0; background: #fff; font-size: 18px; color: var(--sub); display: grid; place-items: center; }
 .map-ctrl button + button { border-top: 1px solid var(--line-2); }

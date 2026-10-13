@@ -8,7 +8,8 @@
 <div class="login-page">
   <section class="login-visual">
     <div style="position:relative">
-      <h1>주거환경 취약요인 공간분석</h1>
+      <h1 class="login-logo"><span class="brand-logo"><span class="b1">살</span><span class="b2">피</span><span class="b3">구</span><span class="b4">로</span></span></h1>
+      <p class="login-sub">주거환경 취약요인 공간분석</p>
       <p>노후도, 경사, 고도, 생활시설 거리를 겹쳐 보고 취약 건물을 찾아 업무로 바로 등록합니다. 서비스 지역은 구로구입니다.</p>
     </div>
     <svg class="grid-art" viewBox="0 0 520 420" aria-hidden="true">

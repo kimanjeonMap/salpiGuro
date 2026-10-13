@@ -65,6 +65,11 @@
     <div class="map-top">
       <div class="map-chip" id="summary-chip"></div>
       <div class="map-chip scale" id="scale-chip"></div>
+      <%-- 켜져 있으면 취약요인 3개 이상 건물이 있는 묶음(빨간 숫자)과 그런 건물 핀만 지도에 표시 --%>
+      <button type="button" class="map-chip chip-toggle on" id="risk-only" aria-pressed="true">
+        <span class="ck" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6.2 2.4 2.4 4.6-5"/></svg></span>
+        <span>취약요인 <b>3</b>개 이상 있는 곳만</span>
+      </button>
     </div>
     <div class="map-ctrl">
       <button id="zoom-in" aria-label="확대">+</button>

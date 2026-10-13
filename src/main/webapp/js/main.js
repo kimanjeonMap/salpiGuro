@@ -18,7 +18,7 @@
   /* 카카오 SDK 가 없으면(키 없음 · 도메인 미등록 · 카카오맵 사용 설정 꺼짐 · 네트워크) 안내만 띄운다 */
   if (!window.kakao || !window.kakao.maps || !window.kakao.maps.load) {
     mapEl.innerHTML = `<div class="map-error"><b>카카오맵을 불러오지 못했습니다</b><p>${mapEl.dataset.key === 'none'
-      ? 'app.properties 의 <code>app.kakao.js-key</code> 에 카카오 JavaScript 키를 넣어 주세요.'
+      ? '서버가 읽은 카카오 키가 비어 있습니다. app.properties 의 <code>app.kakao.js-key</code> 에 JavaScript 키를 넣고 저장한 뒤, Tomcat 을 재시작해야 반영됩니다.'
       : `카카오 개발자 콘솔에서 이 주소(<code>${esc(location.origin)}</code>)가 [플랫폼 &gt; Web 사이트 도메인]에 등록돼 있는지, [제품 설정 &gt; 카카오맵] 사용 설정이 켜져 있는지 확인하세요.`}</p></div>`;
     return;
   }
@@ -34,6 +34,7 @@
       cluster: null,  // 선택한 격자·묶음 { c: 집계, extent, list: 구역 건물 목록, label }
       mode: 'gu',     // 지금 그려진 표시 방식 : gu(구 단위) | cluster(도넛 묶음) | building(건물 핀)
       summary: { total: 0, riskCount: 0, riskMin: 3 },
+      riskOnly: true, // 취약요인 riskMin 개 이상 건물이 있는 곳만 지도에 표시 (지도 위 칩으로 끄고 켬)
       points: new Map()
     };
     const levelOf = n => C.LEVELS.find(l => n >= l.min);
@@ -223,7 +224,7 @@
     const PANEL_MS = 260;                          // app.css 의 .main-layout transition 시간과 같게
     const PANEL_NAME = { left: '왼쪽 패널', right: '오른쪽 패널' };
     const panelOpen = { left: true, right: true };
-    let anchorUntil = 0;
+    let anchor = null;    // 패널이 움직이는 동안 지도 내용을 화면에 붙여 둘 기준 (beginAnchor)
     let mapBox = mapEl.getBoundingClientRect();
 
     function applyPanel(side) {
@@ -234,31 +235,35 @@
       btn.setAttribute('aria-label', label);
       btn.title = label;
     }
-    /* 지도 칸 크기가 바뀌었으면 카카오맵에 알리고, 패널 움직임 중이면 내용을 화면에 고정 */
+    /* 패널을 움직이기 전 상태를 기준으로 잡는다 : 그때의 지도 중심, 지도 칸의 화면상 가운데 x,
+       화면 1px 당 좌표 변화(가로 방향). 정수 픽셀로 반올림되는 화면 좌표 대신 좌표 두 개의 차이로 구해서 오차가 없다 */
+    function beginAnchor() {
+      if (animating()) return null;
+      const proj = map.getProjection();
+      const a = proj.coordsFromContainerPoint(new kakao.maps.Point(0, 0));
+      const b = proj.coordsFromContainerPoint(new kakao.maps.Point(1000, 0));
+      const r = mapEl.getBoundingClientRect();
+      return { c: map.getCenter(), x: r.left + r.width / 2,
+               dLat: (b.getLat() - a.getLat()) / 1000, dLng: (b.getLng() - a.getLng()) / 1000 };
+    }
+    /* 지도 칸 크기가 바뀌었으면 카카오맵에 알리고, 패널 움직임 중이면 내용을 화면에 고정.
+       매 프레임 '움직이기 전 기준'에서 바로 계산하므로(조금씩 옮기며 더하지 않음) 오차가 쌓이지 않는다 */
     function relayout() {
       const r = mapEl.getBoundingClientRect();
       if (r.width === mapBox.width && r.height === mapBox.height && r.left === mapBox.left) return;
-      if (animating()) { map.relayout(); mapBox = r; return; }
-      const c = map.getCenter();
-      map.relayout();
-      map.setCenter(c);
-      if (performance.now() < anchorUntil) {
-        /* 지도 칸의 화면상 중심이 움직인 만큼 지도 중심도 옮긴다 */
-        const dx = (r.left + r.width / 2) - (mapBox.left + mapBox.width / 2);
-        if (dx) {
-          const proj = map.getProjection();
-          const p = proj.containerPointFromCoords(c);
-          map.setCenter(proj.coordsFromContainerPoint(new kakao.maps.Point(p.x + dx, p.y)));
-        }
-      }
       mapBox = r;
+      if (animating()) { map.relayout(); return; }
+      if (!anchor) { const c = map.getCenter(); map.relayout(); map.setCenter(c); return; }
+      map.relayout();
+      const d = (r.left + r.width / 2) - anchor.x;     // 지도 칸 가운데가 화면에서 옮겨 간 거리(px)
+      map.setCenter(new kakao.maps.LatLng(anchor.c.getLat() + d * anchor.dLat, anchor.c.getLng() + d * anchor.dLng));
     }
     /* 패널을 열거나 닫는다. 움직임이 끝나면 resolve */
     function setPanel(side, open) {
       if (panelOpen[side] === open) return Promise.resolve();
       panelOpen[side] = open;
       mapBox = mapEl.getBoundingClientRect();
-      anchorUntil = performance.now() + PANEL_MS + 120;
+      const mine = anchor = beginAnchor();
       applyPanel(side);
       try { localStorage.setItem(PANEL_KEY, JSON.stringify(panelOpen)); } catch (e) { /* 저장할 수 없는 환경 */ }
       return new Promise(resolve => {
@@ -266,7 +271,7 @@
         (function tick() {
           relayout();
           if (performance.now() - t0 < PANEL_MS + 60) requestAnimationFrame(tick);
-          else { relayout(); scheduleLoad(); resolve(); }
+          else { relayout(); if (anchor === mine) anchor = null; scheduleLoad(); resolve(); }
         })();
       });
     }
@@ -301,34 +306,49 @@
       const lv = lvNow();
       const mode = modeOf(lv);
       const seq = ++pointSeq;
-      if (mode === 'gu') { setMarks([]); state.points.clear(); return; }   // 구 단위에서는 건물 표시 없음
+      if (mode === 'gu') { lastRaw = null; setMarks([]); state.points.clear(); return; }   // 구 단위에서는 건물 표시 없음
       const bounds = map.getBounds(), sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
       const pad = mode === 'cluster' ? 0.002 : 0.0005;   // 화면 바깥 조금 (건물 단위는 약 50m)
       const q = criteriaQuery();
       q.set('bbox', [sw.getLng() - pad, sw.getLat() - pad, ne.getLng() + pad, ne.getLat() + pad].map(v => v.toFixed(5)).join(','));
       try {
-        let items;
+        let list;
         if (mode === 'cluster') {
           /* 동 단위 : 칸 크기(경도, 도) = 화면 CLUSTER_PX 픽셀 */
           if (!cellByLevel[lv]) cellByLevel[lv] = C.CLUSTER_PX * (ne.getLng() - sw.getLng()) / mapEl.clientWidth;
           q.set('cell', cellByLevel[lv].toFixed(8));
-          const list = await Common.api('GET', '/api/buildings/clusters?' + q.toString());
-          if (seq !== pointSeq) return;
-          items = list.map(c => (c.point ? pinItem(c.point) : clusterItem(c)));
+          list = await Common.api('GET', '/api/buildings/clusters?' + q.toString());
         } else {
-          /* 건물 단위 : 화면 안 건물을 하나씩 핀으로 (취약요인 많은 순, 최대 BUILDING_LIMIT 동) */
+          /* 건물 단위 : 화면 안 건물을 하나씩 (취약요인 많은 순, 최대 BUILDING_LIMIT 동) */
           q.set('limit', C.BUILDING_LIMIT);
-          const list = await Common.api('GET', '/api/buildings?' + q.toString());
-          if (seq !== pointSeq) return;
-          const same = samePlaceGroups(list);
-          items = list.map(b => pinItem(b, same.get(b.id)));
+          list = await Common.api('GET', '/api/buildings?' + q.toString());
         }
-        state.points.clear();
+        if (seq !== pointSeq) return;
+        lastRaw = { mode, list };
         state.mode = mode;
-        items.forEach(it => { if (it.kind === 'building') state.points.set(it.data.id, it.data); });
-        setMarks(items);
+        state.points.clear();
+        list.forEach(x => { const b = mode === 'cluster' ? x.point : x; if (b) state.points.set(b.id, b); });
+        renderMarks();
         renderLegend();
       } catch (err) { Common.toast(err.message); }
+    }
+    /* 마지막으로 받은 자료(lastRaw)를 지도에 그린다.
+       riskOnly 이면 취약요인 riskMin 개 이상 건물이 있는 묶음(빨간 숫자가 붙는 묶음)과 그런 건물 핀만.
+       선택한 건물은 기준 미만이어도 항상 보인다 */
+    let lastRaw = null;
+    const passRisk = b => !state.riskOnly || b.count >= state.summary.riskMin || b.id === state.selectedId;
+    function renderMarks() {
+      if (!lastRaw) { setMarks([]); return; }
+      let items;
+      if (lastRaw.mode === 'cluster') {
+        items = lastRaw.list
+          .filter(c => (c.point ? passRisk(c.point) : !state.riskOnly || c.riskCount > 0))
+          .map(c => (c.point ? pinItem(c.point) : clusterItem(c)));
+      } else {
+        const same = samePlaceGroups(lastRaw.list);   // 겹친 위치 목록은 거르기 전 전체 기준
+        items = lastRaw.list.filter(passRisk).map(b => pinItem(b, same.get(b.id)));
+      }
+      setMarks(items);
     }
     let moveTimer = null;
     function scheduleLoad() {
@@ -375,6 +395,7 @@
       const prev = state.selectedId;
       state.selectedId = null; state.detail = null; state.work = null;
       detailSeq++;
+      renderMarks();
       redrawPins(prev);
       renderPanel();
       loadClusterList();
@@ -395,6 +416,8 @@
       try {
         state.summary = await Common.api('GET', '/api/buildings/summary?' + criteriaQuery().toString());
         renderGu();
+        applyRiskOnly();
+        renderMarks();
         renderLegend();
         $('#summary-chip').innerHTML = `${C.GU_NAME} 건물 ${state.summary.total.toLocaleString()}동 중 취약요인 ${state.summary.riskMin}개 이상 <b>${state.summary.riskCount.toLocaleString()}건</b>`;
       } catch (err) { Common.toast(err.message); }
@@ -425,7 +448,7 @@
     function onLevelChanged() {
       const lv = lvNow();
       wrapEl.classList.toggle('show-labels', lv <= C.LEVEL.LABEL_MAX);
-      if (modeOf(lv) === 'gu') { pointSeq++; setMarks([]); state.points.clear(); }
+      if (modeOf(lv) === 'gu') { pointSeq++; lastRaw = null; setMarks([]); state.points.clear(); }
       renderGu();
       updateScaleChip();
       renderLegend();
@@ -490,6 +513,7 @@
       const prev = state.selectedId;
       state.selectedId = id;
       state.detail = null; state.work = null;
+      renderMarks();
       redrawPins(prev, id);
       if (!id) { detailSeq++; renderPanel(); return; }
       renderPanel();
@@ -733,20 +757,37 @@
     let legendKey = '';
     function renderLegend() {
       const mode = modeOf(lvNow());
-      const key = mode + '|' + state.summary.riskMin;
+      const key = mode + '|' + state.summary.riskMin + '|' + state.riskOnly;
       if (key === legendKey) return;
       legendKey = key;
       if (mode === 'cluster') {
         $('#legend').innerHTML = `<div class="lg-row"><span class="lg-title">취약요인 수</span>${lvItems}</div>`
           + `<div class="lg-row"><span class="lg-title">묶음</span><span class="lg-item"><img src="${sampleCluster}" width="26" height="26" alt="">숫자 = 건물 수 · 테두리 = 단계 비율</span>`
           + `<span class="lg-item"><span class="lg-badge">N</span>취약요인 ${state.summary.riskMin}개 이상</span></div>`
-          + `<div class="lg-row lg-note">묶음을 누르면 확대하고, 그 구역의 건물 목록을 보여줍니다</div>`;
+          + `<div class="lg-row lg-note">${state.riskOnly ? `취약요인 ${state.summary.riskMin}개 이상 건물이 있는 묶음만 표시 중 · ` : ''}묶음을 누르면 확대하고, 그 구역의 건물 목록을 보여줍니다</div>`;
         return;
       }
-      $('#legend').innerHTML = `<div class="lg-row"><span class="lg-title">취약요인 수</span>${lvItems}</div>`
+      /* 건물 단위에서 riskOnly 이면 기준 이상 단계(3개 · 4개 이상)만 범례에 */
+      const lvShown = state.riskOnly ? C.LEVELS.filter(l => l.min >= state.summary.riskMin) : C.LEVELS;
+      $('#legend').innerHTML = `<div class="lg-row"><span class="lg-title">취약요인 수</span>${lvShown.slice().reverse().map(l => `<span class="lg-item"><span class="sw" style="background:${C.COLORS[l.key]}"></span>${l.label}</span>`).join('')}</div>`
         + `<div class="lg-row"><span class="lg-title">용도</span>${useItems}</div>`
-        + `<div class="lg-row lg-note">핀이 겹친 곳을 누르면 그 위치의 건물 목록을 보여줍니다</div>`;
+        + `<div class="lg-row lg-note">${state.riskOnly ? `취약요인 ${state.summary.riskMin}개 이상 건물만 표시 중 · ` : ''}핀이 겹친 곳을 누르면 그 위치의 건물 목록을 보여줍니다</div>`;
     }
+    /* 지도 위 칩 : 취약 건물만 보기 켜고 끄기 */
+    const riskBtn = $('#risk-only');
+    function applyRiskOnly() {
+      riskBtn.classList.toggle('on', state.riskOnly);
+      riskBtn.setAttribute('aria-pressed', String(state.riskOnly));
+      riskBtn.querySelector('b').textContent = state.summary.riskMin;
+      riskBtn.title = state.riskOnly ? '누르면 모든 건물을 표시합니다' : `누르면 취약요인 ${state.summary.riskMin}개 이상 있는 곳만 표시합니다`;
+    }
+    riskBtn.addEventListener('click', () => {
+      state.riskOnly = !state.riskOnly;
+      applyRiskOnly();
+      renderMarks();
+      renderLegend();
+    });
+    applyRiskOnly();
     renderLegend();
 
     /* ---------- 좌측 : 분석 지역 / 주소 검색 ---------- */

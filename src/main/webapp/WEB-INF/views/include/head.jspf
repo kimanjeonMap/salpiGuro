@@ -12,7 +12,7 @@
     <meta name="_csrf" content="${_csrf.token}">
     <meta name="_csrf_header" content="${_csrf.headerName}">
   </c:if>
-  <title><c:out value="${pageTitle}"/> | 주거환경 취약요인 공간분석</title>
+  <title><c:out value="${pageTitle}"/> | 살피구로</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <link rel="stylesheet" href="<c:url value='/css/app.css'/>">
 </head>
